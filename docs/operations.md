@@ -46,13 +46,17 @@ Read from environment variables or `.env` (`config.py`, case-insensitive).
 | `evaluate <dataset.jsonl>` | Retrieval and answer evaluation on a JSONL set; writes JSON and a sibling CSV (default `data/evaluation/results.json`) |
 | `evaluate-reader <dataset>` | Reader-only evaluation from gold page images (`data/evaluation/reader.json`) |
 | `evaluate-ragas <dataset>` | RAGAS metrics (needs the `evaluation` extra; `data/evaluation/ragas.json`) |
+| `benchmark-prepare docvqa\|chartqa\|mpdocvqa\|vidore-* [--samples N]` | Stream a benchmark subset and write `dataset.jsonl` plus image/PDF inputs (see [benchmarking.md](benchmarking.md)) |
+| `benchmark <dataset.jsonl>... [--modes] [--limit] [--corpus]` | Index images, compare text-only vs hybrid, write `report.md`, results and RAGAS files |
+| `benchmark-suite [--samples N] [--suites] [--modes] [--workers] [--dry-run] [--max-calls] [--out-dir]` | Full suite: answers, corpus retrieval, multi-page, citations, abstention. Needs a separate `DATABASE_URL`; resumable |
+| `benchmark-ragas <run_dir> [--limit N]` | RAGAS on a suite run's `ragas-*.jsonl`; writes `ragas.json` and `ragas.md` |
 | `version` | Print the version |
 
 Install extras as needed: `.[dev,parsing,models]` for normal use, `.[evaluation]` for evaluation.
 
 ## Evaluation
 
-`evaluation/docvqa.py` implements ANLS and `evaluation/chartqa.py` relaxed accuracy; `evaluation/ragas_eval.py` wraps RAGAS. `baseline.py` provides a text-only reader to compare against hybrid mode. Outputs go under `data/evaluation/`, which is git-ignored.
+`evaluation/docvqa.py` implements ANLS and `evaluation/chartqa.py` relaxed accuracy; `evaluation/ragas_eval.py` wraps RAGAS. `baseline.py` retrieves from extracted text and OCR only, excluding visual descriptions and page images. In the historical full-suite run, text-only retrieval returned no pages for scanned DocVQA samples; its 3.0 % answer score therefore reflects failure to retrieve evidence, not reading accuracy on a retrieved page. MP-DocVQA's serialized answer lists are parsed before ANLS scoring. Outputs go under `data/evaluation/`, which is git-ignored.
 
 ## Tests and checks
 

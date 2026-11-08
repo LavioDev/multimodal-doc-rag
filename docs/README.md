@@ -11,6 +11,7 @@ Technical documentation for Multimodal Document RAG. Start with the architecture
 | [data-model.md](data-model.md) | PostgreSQL tables, vector index, files on disk, migrations |
 | [api-reference.md](api-reference.md) | FastAPI endpoints, request and response shapes, status codes |
 | [frontend.md](frontend.md) | Nuxt app structure, API proxy, source panel behavior |
+| [benchmarking.md](benchmarking.md) | Full benchmark suite (DocVQA, ChartQA, MP-DocVQA, ViDoRe retrieval, abstention), reference results, how to read them |
 | [operations.md](operations.md) | CLI commands, configuration, evaluation, troubleshooting |
 
 Diagrams use [Mermaid](https://mermaid.js.org/), which GitHub renders directly.

@@ -5,6 +5,7 @@ import importlib.util
 import json
 import sys
 from pathlib import Path
+from typing import Annotated
 
 import typer
 from rich.console import Console
@@ -323,6 +324,197 @@ def evaluate_ragas(dataset: Path, output: Path = Path("data/evaluation/ragas.jso
         encoding="utf-8",
     )
     console.print(f"RAGAS metrics written to {output}")
+
+
+def _parse_modes(modes: str) -> tuple[str, ...]:
+    chosen = tuple(mode.strip() for mode in modes.split(",") if mode.strip())
+    if not chosen or any(mode not in ("text", "hybrid") for mode in chosen):
+        raise typer.BadParameter("modes must be text, hybrid or text,hybrid")
+    return chosen
+
+
+def _prepare_suites(suites: list[str], samples: int, base: Path) -> list[Path]:
+    """Download or reuse each suite's dataset under ``base``/datasets/<suite>."""
+    from multimodal_doc_rag.evaluation.benchmark import (
+        ABSTAIN_PACK,
+        prepare_abstention,
+        prepare_dataset,
+        read_jsonl,
+    )
+
+    datasets: list[Path] = []
+    for suite in suites:
+        target = base / "datasets" / suite
+        existing = target / "dataset.jsonl"
+        needed = 1 if suite == "abstain" else samples
+        if existing.is_file() and len(read_jsonl(existing)) >= needed:
+            datasets.append(existing)
+            console.print(f"Reusing {existing}")
+            continue
+        if suite == "abstain":
+            dataset = prepare_abstention(ABSTAIN_PACK, target)
+            if dataset is None:
+                console.print(f"[yellow]Skipping abstain: {ABSTAIN_PACK} not found[/yellow]")
+                continue
+        else:
+            console.print(f"Downloading {suite} ({samples} questions)...")
+            dataset = prepare_dataset(suite, samples, target)
+        datasets.append(dataset)
+    return datasets
+
+
+@app.command("benchmark-prepare")
+def benchmark_prepare(
+    name: Annotated[str, typer.Argument(help="docvqa, chartqa, mpdocvqa or vidore-*")],
+    samples: Annotated[int, typer.Option(help="Questions to take from the dataset start")] = 50,
+    out_dir: Annotated[
+        Path | None, typer.Option(help="Default: data/evaluation/benchmarks/<name>")
+    ] = None,
+) -> None:
+    """Download a benchmark subset (streaming) and write files plus dataset.jsonl."""
+    from multimodal_doc_rag.evaluation.benchmark import prepare_dataset
+
+    target = out_dir or Path("data/evaluation/benchmarks") / name
+    dataset = prepare_dataset(name.lower(), samples, target)
+    console.print(f"Wrote {dataset}. No model calls were made.")
+
+
+@app.command("benchmark")
+def benchmark(
+    dataset: Annotated[list[Path], typer.Argument(help="dataset.jsonl from benchmark-prepare")],
+    modes: Annotated[str, typer.Option(help="Comma-separated: text, hybrid")] = "text,hybrid",
+    limit: Annotated[int, typer.Option(help="Only the first N questions (0 = all)")] = 0,
+    corpus: Annotated[
+        bool, typer.Option("--corpus", help="Search all indexed pages and report Recall@k")
+    ] = False,
+    workers: Annotated[int, typer.Option(help="Parallel model calls")] = 4,
+    output_dir: Annotated[
+        Path | None, typer.Option(help="Default: <dataset dir>/run-<timestamp>")
+    ] = None,
+) -> None:
+    """Index files, answer in each mode, write report.md, results and RAGAS files."""
+    import time
+
+    from multimodal_doc_rag.evaluation.benchmark import run_benchmark
+
+    chosen = _parse_modes(modes)
+    for path in dataset:
+        target = output_dir or path.parent / f"run-{time.strftime('%Y%m%d-%H%M%S')}"
+        summary = run_benchmark(
+            path, target, chosen, limit or None, corpus, workers=workers,
+            on_progress=lambda done, total: console.print(f"[dim]{done}/{total}[/dim]", end="\r"),
+        )
+        console.print(f"\nReport: {target / 'report.md'}")
+        for suite, block in summary.items():
+            for mode, row in block["modes"].items():
+                score = "n/a" if row["score"] is None else f"{row['score'] * 100:.1f}%"
+                console.print(f"{suite} {mode}: {score} (n={row['n']}, passed={row['passed']})")
+
+
+@app.command("benchmark-suite")
+def benchmark_suite(
+    samples: Annotated[int, typer.Option(help="Questions per suite")] = 200,
+    suites: Annotated[
+        str, typer.Option(help="docvqa,chartqa,vidore,mpdocvqa,abstain (comma-separated)")
+    ] = "docvqa,chartqa,vidore,mpdocvqa,abstain",
+    modes: Annotated[str, typer.Option(help="Comma-separated: text, hybrid")] = "text,hybrid",
+    workers: Annotated[int, typer.Option(help="Parallel model calls")] = 4,
+    dry_run: Annotated[
+        bool, typer.Option("--dry-run", help="Print pages to describe and model calls, then stop")
+    ] = False,
+    max_calls: Annotated[int, typer.Option(help="Stop when this many model calls are made")] = 0,
+    out_dir: Annotated[
+        Path | None, typer.Option(help="Run directory; rerun with the same path to resume")
+    ] = None,
+    allow_app_db: Annotated[
+        bool, typer.Option("--allow-app-db", help="Allow indexing into the app database")
+    ] = False,
+) -> None:
+    """Run the full benchmark: answers, corpus retrieval, multi-page, citations, abstention."""
+    import time
+
+    from multimodal_doc_rag.config import Settings
+    from multimodal_doc_rag.evaluation.benchmark import (
+        estimate_cost,
+        expand_suites,
+        read_jsonl,
+        run_suites,
+    )
+
+    chosen = _parse_modes(modes)
+    try:
+        names = expand_suites(s.strip() for s in suites.split(",") if s.strip())
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    default_db = Settings.model_fields["database_url"].default
+    if not dry_run and not allow_app_db and get_settings().database_url == default_db:
+        raise typer.BadParameter(
+            "DATABASE_URL points at the app database. Benchmark documents would appear in "
+            "the app. Set DATABASE_URL to a separate database (see docs/benchmarking.md) "
+            "or pass --allow-app-db."
+        )
+    base = Path("data/evaluation/benchmarks")
+    datasets = _prepare_suites(names, samples, base)
+    if not datasets:
+        raise typer.BadParameter("No datasets available")
+    target = out_dir or base / f"suite-{time.strftime('%Y%m%d-%H%M%S')}"
+    if dry_run:
+        rows = []
+        for dataset in datasets:
+            for row in read_jsonl(dataset):
+                row.setdefault("file_path", str(dataset.parent / row.get("file_path", "")))
+                rows.append(row)
+        estimate = estimate_cost(rows, chosen)
+        console.print(estimate)
+        console.print(
+            f"~{estimate['pages_to_describe'] + estimate['answer_calls']} model calls "
+            f"({estimate['pages_to_describe']} page descriptions + "
+            f"{estimate['answer_calls']} answer calls). Nothing was sent."
+        )
+        return
+    summary = run_suites(
+        datasets, target, chosen, None, False, workers=workers, max_calls=max_calls or None,
+        on_progress=lambda done, total: console.print(f"[dim]{done}/{total}[/dim]", end="\r"),
+    )
+    console.print(f"\nReport: {target / 'report.md'}")
+    for suite, block in summary.items():
+        for mode, row in block["modes"].items():
+            score = "n/a" if row["score"] is None else f"{row['score'] * 100:.1f}%"
+            console.print(f"{suite} {mode}: {score} (n={row['n']}, passed={row['passed']})")
+
+
+@app.command("benchmark-ragas")
+def benchmark_ragas(
+    run_dir: Annotated[Path, typer.Argument(help="A benchmark run directory")],
+    limit: Annotated[int, typer.Option(help="Max records per file (RAGAS makes many calls)")] = 100,
+) -> None:
+    """Run RAGAS (faithfulness, relevancy, context precision) on a run's ragas-*.jsonl."""
+    from multimodal_doc_rag.evaluation.benchmark import read_jsonl
+    from multimodal_doc_rag.evaluation.ragas_eval import evaluate_rag
+
+    files = sorted(run_dir.glob("ragas-*.jsonl"))
+    if not files:
+        raise typer.BadParameter(f"No ragas-*.jsonl files in {run_dir}")
+    results = {}
+    for file in files:
+        records = read_jsonl(file)[:limit]
+        console.print(f"RAGAS on {file.name} ({len(records)} records)...")
+        results[file.stem.removeprefix("ragas-")] = {
+            "records": len(records), "metrics": evaluate_rag(records),
+        }
+    (run_dir / "ragas.json").write_text(
+        json.dumps({"model": get_settings().openrouter_model, "results": results}, indent=2)
+        + "\n", encoding="utf-8",
+    )
+    lines = ["# RAGAS", "", "| Set | N | Faithfulness | Answer relevancy | Context precision |",
+             "| --- | ---: | ---: | ---: | ---: |"]
+    for name, item in results.items():
+        m = item["metrics"]
+        cells = [f"{m[k]:.3f}" if k in m else "n/a"
+                 for k in ("faithfulness", "answer_relevancy", "context_precision")]
+        lines.append(f"| {name} | {item['records']} | " + " | ".join(cells) + " |")
+    (run_dir / "ragas.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    console.print(f"Wrote {run_dir / 'ragas.md'}")
 
 
 if __name__ == "__main__":

@@ -104,4 +104,4 @@ A chat turn makes up to three OpenRouter calls: rewrite (non-ASCII or follow-up 
 
 - `POST /questions`: same pipeline across any set of documents, no history, nothing saved.
 - `multimodal-rag ask "..." --mode hybrid`: the same from the CLI, printing the JSON answer.
-- `baseline.py`: text-only reader used as an evaluation baseline.
+- `baseline.py`: text-only reader used as an evaluation baseline. It retrieves from extracted text and OCR, then answers without visual descriptions or page images. On the scanned DocVQA sample, text-only retrieval returned no pages, so its low answer score measures retrieval failure rather than reading quality given a page.

@@ -161,8 +161,13 @@ def answer_question(
     image_paths: dict[tuple[str, int], Path] | None = None,
     mode: str = "text",
     conversation: list[dict[str, str]] | None = None,
+    concise: bool = False,
 ) -> Answer:
-    """Draft claims, then check their source spans and semantic support."""
+    """Draft claims, then check their source spans and semantic support.
+
+    With ``concise`` each claim is only the shortest exact answer (a value, name or phrase),
+    which is what extractive benchmarks such as DocVQA and ChartQA score.
+    """
     if not context:
         message = "I could not find relevant evidence in the processed documents."
         return Answer(answer=message, answer_parts=[AnswerPart(text=message, status="abstained")])
@@ -182,11 +187,17 @@ def answer_question(
         chat_context = "Prior conversation for resolving references only (not evidence):\n"
         chat_context += transcript
         chat_context += "\nUse the retrieved source material below as the only evidence.\n"
+    style = (
+        "Each claim's text must be ONLY the shortest exact answer (a value, name, date or "
+        "short phrase, copied as written in the source), never a full sentence. "
+        if concise else ""
+    )
     content: list[dict[str, Any]] = [
         {
             "type": "text",
             "text": (
-                "Use only the source material below. Return exactly this JSON shape: "
+                style
+                + "Use only the source material below. Return exactly this JSON shape: "
                 '{"parts":[{"text":"one short standalone claim","sources":' 
                 '[{"id":"S1","quote":"exact source substring","bbox":[x1,y1,x2,y2]}]}]}. '
                 "Each sources item has "

@@ -22,6 +22,7 @@ def ask_detailed(
     top_k: int = 3,
     doc_ids: list[str] | None = None,
     conversation: list[dict[str, str]] | None = None,
+    concise: bool = False,
 ) -> tuple[Answer, int, list[SourcePage]]:
     """Return answer, latency, and ranked candidate pages for evaluation."""
     import time
@@ -32,7 +33,7 @@ def ask_detailed(
         elements, images, page_ids = retrieve_from_session(
             session, retrieval_question, mode, top_k, doc_ids
         )
-    answer = answer_question(question, elements, images, mode, conversation)
+    answer = answer_question(question, elements, images, mode, conversation, concise)
     retrieved = [SourcePage(doc_id=document_id, page=page) for document_id, page in page_ids]
     return answer, int((time.perf_counter() - started) * 1000), retrieved
 

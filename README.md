@@ -146,6 +146,19 @@ corepack pnpm build
 
 Run `multimodal-rag migrate` after pulling backend updates.
 
+### Benchmark
+
+Compare text-only and hybrid answering on DocVQA (target >= 75 % ANLS) and ChartQA (target >= 65 % relaxed accuracy):
+
+```powershell
+multimodal-rag benchmark-prepare chartqa --samples 100
+multimodal-rag benchmark data\evaluation\benchmarks\chartqa\dataset.jsonl
+```
+
+For the full suite (answers, retrieval, multi-page documents, citations, abstention) use a separate database and `multimodal-rag benchmark-suite --samples 200 --dry-run` first. The run writes `report.md`, per-question results and RAGAS-ready files. See [docs/benchmarking.md](docs/benchmarking.md).
+
+Latest MP-DocVQA hybrid retest: 73.9 % ANLS across 200 distinct questions in two 100-question batches; one model response returned invalid JSON and counted as zero. DocVQA text-only scored 3.0 % in the earlier full-suite run because retrieval returned no pages for the scanned questions, so that score reflects retrieval failure rather than the reader's ability to read a retrieved page. See the benchmark guide for run details and intervals.
+
 ## Data and services
 
 - **PostgreSQL** stores documents, jobs, chat turns, citations, evidence and pins.
