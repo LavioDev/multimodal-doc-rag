@@ -38,6 +38,7 @@ const sourceError = ref<string | null>(null)
 const sourceEvidence = ref<RagEvidence[]>([])
 const sourceCitation = ref<RagCitation | null>(null)
 const pageImageOpen = ref(false)
+const pageImageLoading = ref(false)
 const sourceImageAspect = ref(1)
 const pageImageSize = ref({ width: 0, height: 0 })
 const pageViewerSize = ref({ width: 1280, height: 800 })
@@ -102,9 +103,17 @@ function updateSourceImageAspect(event: Event) {
   const image = event.target as HTMLImageElement
   if (image.naturalWidth && image.naturalHeight) sourceImageAspect.value = image.naturalWidth / image.naturalHeight
 }
-function updatePageImageSize(event: Event) {
+async function updatePageImageSize(event: Event) {
   const image = event.target as HTMLImageElement
-  if (image.naturalWidth && image.naturalHeight) pageImageSize.value = { width: image.naturalWidth, height: image.naturalHeight }
+  if (!image.naturalWidth || !image.naturalHeight) return
+  pageImageSize.value = { width: image.naturalWidth, height: image.naturalHeight }
+  await nextTick()
+  requestAnimationFrame(() => {
+    pageImageLoading.value = false
+  })
+}
+function failPageImageLoad() {
+  pageImageLoading.value = false
 }
 function updatePageViewerSize() {
   pageViewerSize.value = { width: window.innerWidth, height: window.innerHeight }
@@ -141,6 +150,7 @@ function closePageImage() {
 }
 function openFullPage() {
   pageZoom.value = 1
+  pageImageLoading.value = true
   pageImageOpen.value = true
 }
 function openDocument() {
@@ -149,14 +159,17 @@ function openDocument() {
   sourceCitation.value = null
   pageImageSize.value = { width: 0, height: 0 }
   pageZoom.value = 1
+  pageImageLoading.value = true
   pageImageOpen.value = true
 }
 function changeSourcePage(offset: number) {
   if (sourcePage.value === null) return
-  sourcePage.value = Math.max(1, Math.min(totalPages.value, sourcePage.value + offset))
+  const nextPage = Math.max(1, Math.min(totalPages.value, sourcePage.value + offset))
+  if (nextPage === sourcePage.value) return
+  pageImageLoading.value = true
+  sourcePage.value = nextPage
   sourceEvidence.value = []
   sourceCitation.value = null
-  pageImageSize.value = { width: 0, height: 0 }
 }
 function zoomPage(offset: number) {
   pageZoom.value = Math.max(0.5, Math.min(3, Math.round((pageZoom.value + offset) * 100) / 100))
@@ -553,11 +566,20 @@ watch(() => document.value?.status, (status) => {
         <div class="flex min-h-full w-fit min-w-full items-center justify-center">
           <div class="relative shrink-0" :style="{ width: `${pageDisplayWidth}px` }">
             <img
+              :key="imageUrl"
               :src="imageUrl"
               :alt="`Full source page ${sourcePage}`"
               class="block h-auto w-full rounded-sm shadow-2xl"
+              :class="{ invisible: pageImageLoading }"
               @load="updatePageImageSize"
+              @error="failPageImageLoad"
             >
+            <div v-if="pageImageLoading" class="absolute inset-0 flex min-h-64 items-center justify-center bg-black/40" role="status" aria-live="polite">
+              <div class="flex items-center gap-3 rounded-full bg-black/75 px-4 py-3 text-sm text-white shadow-lg">
+                <UIcon name="i-lucide-loader-circle" class="size-5 animate-spin" />
+                <span>Loading page...</span>
+              </div>
+            </div>
             <div
               v-if="normalizedSourceBbox"
               class="pointer-events-none absolute border-2 border-primary bg-transparent shadow-none"

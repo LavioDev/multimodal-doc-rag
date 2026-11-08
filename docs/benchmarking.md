@@ -150,6 +150,14 @@ The 200 prepared MP-DocVQA questions were run as two disjoint 100-question batch
 
 The 199 successful predictions average 74.3 % ANLS. The combined point estimate is 1.1 points below the 75 % target, and its confidence interval crosses the target, so this run does not establish that the system is above or below the target. The batch reports are [rows 1–100](../data/evaluation/benchmarks/mpdocvqa-100-live/report.md) and [rows 101–200](../data/evaluation/benchmarks/mpdocvqa-100-live-2/report.md); the combined summary is [here](../data/evaluation/benchmarks/mpdocvqa-200-live/report.md).
 
+### Score overview
+
+The chart compares historical full-suite results for DocVQA and ChartQA with the fresh 200-question MP-DocVQA hybrid retest. Error bars show 95 % bootstrap intervals. MP-DocVQA text-only was not rerun, so it is intentionally left blank.
+
+![Benchmark answer accuracy with 95% bootstrap intervals](assets/benchmark-results.png)
+
+Vector version: [SVG](assets/benchmark-results.svg).
+
 ## Relation to the other evaluation commands
 
 - `evaluate`: questions against already indexed documents from your own JSONL (for example the ColPali test pack).
