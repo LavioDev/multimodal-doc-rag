@@ -1,0 +1,35 @@
+{
+  "name": "nuxt-ui-template-chat",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "nuxt build",
+    "dev": "nuxt dev",
+    "preview": "nuxt preview",
+    "postinstall": "nuxt prepare",
+    "lint": "eslint .",
+    "typecheck": "nuxt typecheck"
+  },
+  "dependencies": {
+    "@comark/nuxt": "^0.8.1",
+    "@iconify-json/lucide": "^1.2.150",
+    "@nuxt/ui": "^4.12.0",
+    "@shikijs/langs": "^4.5.0",
+    "@vueuse/core": "^14.4.0",
+    "ai": "^7.0.159",
+    "date-fns": "^4.4.0",
+    "motion-v": "^2.10.0",
+    "nuxt": "^4.6.4",
+    "shiki": "^4.5.0",
+    "tailwindcss": "^4.3.3"
+  },
+  "devDependencies": {
+    "@nuxt/eslint": "^1.17.0",
+    "@types/node": "^24.19.2",
+    "eslint": "^10.14.0",
+    "eslint-plugin-better-tailwindcss": "^4.10.0",
+    "typescript": "^6.0.3",
+    "vue-tsc": "^3.3.14"
+  },
+  "packageManager": "pnpm@12.16.1"
+}

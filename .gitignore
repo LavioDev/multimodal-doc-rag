@@ -1,0 +1,62 @@
+# Environment and secrets
+.env
+!.env.example
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+
+# Python tooling
+.pytest_cache/
+.ruff_cache/
+.runtime/
+.coverage
+htmlcov/
+build/
+dist/
+*.egg-info/
+
+# Documents, generated outputs, and downloaded models
+data/raw/*
+!data/raw/.gitkeep
+data/processed/*
+!data/processed/.gitkeep
+data/qa/*
+!data/qa/.gitkeep
+data/evaluation/*
+!data/evaluation/.gitkeep
+models/
+checkpoints/
+*.safetensors
+*.pt
+*.pth
+*.bin
+
+# Local editor settings
+.vscode/
+.idea/
+
+# Nuxt frontend
+frontend/node_modules/
+frontend/.pnpm-store/
+frontend/.nuxt/
+frontend/.output/
+frontend/dist/
+frontend/.env
+frontend/.env.*
+!frontend/.env.example
+
+# Local scratch, generated demo packs and logs
+tmp/
+output/
+*.zip
+typecheck.log
+frontend/.data/
+frontend/typecheck.log
+
+# Original upstream frontend git history, moved aside so frontend/ is tracked normally
+.git-frontend-upstream/
+
+# Local tooling
+.claude/
+.env.local
