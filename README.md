@@ -6,6 +6,8 @@ Multimodal Document RAG is a retrieval-augmented generation (RAG) app for PDFs, 
 
 ![Document chat with a cited source panel](docs/app_img.png)
 
+Technical documentation (architecture, flows, data model, API, operations) is in [`docs/`](docs/README.md).
+
 ## Highlights
 
 - **Multimodal retrieval**: text, OCR and visual page descriptions are embedded separately and fused with reciprocal-rank fusion. Choose **Hybrid** (text + page images) or **Text only** per question.
