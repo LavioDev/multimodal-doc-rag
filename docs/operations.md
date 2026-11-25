@@ -1,16 +1,41 @@
 # Operations
 
+## Docker Compose background deployment
+
+Create `.env` from `.env.example`, set `API_KEY`, then start the complete app from the repository root:
+
+```powershell
+Copy-Item .env.example .env
+docker compose up --build -d
+docker compose ps
+```
+
+The frontend is available at `http://localhost:3000`. Only the frontend is published on the host, bound to localhost. PostgreSQL is also published on host port 5433 for optional local tools; change `POSTGRES_PORT` if that port is occupied. API, worker and Gotenberg communicate on the private Compose network.
+
+Useful lifecycle commands:
+
+```powershell
+docker compose logs -f api worker
+docker compose restart api worker
+docker compose down
+docker compose up --build -d
+```
+
+`down` preserves the PostgreSQL volume and the `data/` directory. Do not use `docker compose down -v` unless deleting the database is intended. Back up the PostgreSQL volume and `data/` together. Docker Desktop must be running; enable **Start Docker Desktop when you sign in to your computer** in Docker Desktop settings for startup after Windows sign-in. The services use `restart: unless-stopped`.
+
+Compose waits for PostgreSQL readiness, applies migrations, then starts the API and worker. The frontend starts after the API `/ready` health check succeeds. After pulling source updates, run `docker compose up --build -d` to rebuild and apply migrations.
+
 ## Services and ports
 
 | Service | Default | Started by |
 | --- | --- | --- |
-| API (uvicorn) | `127.0.0.1:8000` | `uvicorn multimodal_doc_rag.api:app --app-dir src --host 127.0.0.1 --port 8000` |
-| Worker | none | `multimodal-rag worker` |
-| Frontend | `127.0.0.1:3000` | `corepack pnpm dev` in `frontend/` |
-| PostgreSQL + pgvector | `localhost:5433` (container 5432) | `docker compose up -d postgres` |
-| Gotenberg | `localhost:3001` (container 3000) | `docker compose up -d gotenberg` |
+| Frontend | `127.0.0.1:3000` | Compose service `frontend` |
+| API (uvicorn) | Internal `api:8000` | Compose service `api` |
+| Worker | none | Compose service `worker` |
+| PostgreSQL + pgvector | `localhost:5433` (container 5432) | Compose service `postgres` |
+| Gotenberg | Internal `gotenberg:3000` | Compose service `gotenberg` |
 
-Compose ports can be changed with `POSTGRES_PORT` and `GOTENBERG_PORT`; keep `DATABASE_URL` and `GOTENBERG_URL` in sync.
+The frontend host port can be changed with `APP_PORT`; the PostgreSQL host port can be changed with `POSTGRES_PORT`.
 
 The API and the worker need the same `.env`, the same database and the same `DATA_DIR`.
 
@@ -24,15 +49,15 @@ Read from environment variables or `.env` (`config.py`, case-insensitive).
 | `OPENROUTER_BASE_URL` | `https://openrouter.ai/api/v1` | Any OpenAI-compatible chat completions endpoint |
 | `OPENROUTER_MODEL` | `qwen/qwen3-vl-8b-instruct` | Must accept image input for hybrid mode and page descriptions |
 | `EMBEDDING_MODEL` | `intfloat/multilingual-e5-small` | Must produce 384 dimensions |
-| `DATABASE_URL` | `postgresql+psycopg://rag:rag_dev_only@localhost:5433/multimodal_rag` | Change the dev password outside local use |
-| `DATA_DIR` | `data` | Relative to the working directory the API and worker start in |
-| `GOTENBERG_URL` | `http://localhost:3001` | Needed only for PPTX/XLSX |
+| `DATABASE_URL` | Set by Compose | Internal PostgreSQL connection |
+| `DATA_DIR` | `/app/data` in containers | Shared bind-mounted uploads and rendered pages |
+| `GOTENBERG_URL` | `http://gotenberg:3000` in containers | Office conversion service |
 | `FRONTEND_ORIGIN` | `http://localhost:3000` | CORS origin |
 | `MAX_DOCUMENT_PAGES` | `200` | Upload rejected above this |
 | `WORKER_LEASE_SECONDS` | `300` | Time without progress before another worker may take a job |
 | `ENVIRONMENT` | `development` | Informational |
 
-`.env` is git-ignored; `.env.example` is the template.
+`.env` is git-ignored; `.env.example` is the template. Compose reads database credentials, host ports and the API key from `.env`.
 
 ## CLI (`multimodal-rag`)
 

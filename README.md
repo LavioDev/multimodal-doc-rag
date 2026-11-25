@@ -45,56 +45,22 @@ Question ──► English search query ──► text branch ┐
 ## Requirements
 
 - Windows 10/11 or another platform with Docker Compose
-- Python 3.12
-- Node.js 22.12+ and Corepack
 - An OpenRouter API key for page processing and answers
 
-## Quick start
+## Quick start (Docker, background)
 
-### 1. Backend
-
-From the project root in PowerShell:
+Install Docker Desktop with the Linux container engine, then from the project root in PowerShell:
 
 ```powershell
 Copy-Item .env.example .env
 # Set API_KEY in .env to your OpenRouter API key
-docker compose up -d postgres gotenberg
-py -3.12 -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install --upgrade pip
-pip install -e ".[dev,parsing,models]"
-multimodal-rag migrate
-multimodal-rag doctor --check-embeddings
+docker compose up --build -d
+docker compose ps
 ```
 
-The embedding check downloads and runs the configured CPU model on Vietnamese and English text. The first run needs internet access; model files are cached afterwards.
+Open [http://localhost:3000](http://localhost:3000). Compose runs the frontend, API, worker, PostgreSQL/pgvector and Gotenberg in the background. The first build downloads dependencies and the embedding model is downloaded on first use. Detailed start, stop, logs, update and backup commands are in [docs/operations.md](docs/operations.md).
 
-Start the API in one terminal:
-
-```powershell
-uvicorn multimodal_doc_rag.api:app --app-dir src --host 127.0.0.1 --port 8000
-```
-
-Start the document worker in another:
-
-```powershell
-multimodal-rag worker
-```
-
-The API listens at `http://127.0.0.1:8000` (health check at `/health`). Gotenberg is at `http://localhost:3001`.
-
-### 2. Frontend
-
-In a third terminal:
-
-```powershell
-cd frontend
-corepack pnpm install --frozen-lockfile
-Copy-Item .env.example .env
-corepack pnpm dev --host 127.0.0.1 --port 3000
-```
-
-Open [http://localhost:3000](http://localhost:3000). `NUXT_RAG_API_BASE` defaults to `http://127.0.0.1:8000`; change it in `frontend/.env` only if the API runs elsewhere.
+To stop the application while preserving documents and database data, run `docker compose down`.
 
 ### 3. Use it
 

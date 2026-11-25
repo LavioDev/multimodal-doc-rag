@@ -21,8 +21,100 @@ services:
     image: gotenberg/gotenberg:8.25.1
     container_name: multimodal-doc-rag-gotenberg
     restart: unless-stopped
+
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["multimodal-rag", "migrate"]
+    restart: "no"
+    environment: &app_environment
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-rag}:${POSTGRES_PASSWORD:-rag_dev_only}@postgres:5432/${POSTGRES_DB:-multimodal_rag}
+      DATA_DIR: /app/data
+      API_KEY: ${API_KEY:-}
+      OPENROUTER_BASE_URL: ${OPENROUTER_BASE_URL:-https://openrouter.ai/api/v1}
+      OPENROUTER_MODEL: ${OPENROUTER_MODEL:-qwen/qwen3-vl-8b-instruct}
+      GOTENBERG_URL: http://gotenberg:3000
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-intfloat/multilingual-e5-small}
+      WORKER_LEASE_SECONDS: ${WORKER_LEASE_SECONDS:-300}
+    volumes:
+      - ./data:/app/data
+      - embedding_cache:/root/.cache/fastembed
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: multimodal-doc-rag-api
+    command: ["uvicorn", "multimodal_doc_rag.api:app", "--app-dir", "src", "--host", "0.0.0.0", "--port", "8000"]
+    restart: unless-stopped
+    environment:
+      <<: *app_environment
+      FRONTEND_ORIGIN: http://localhost:3000
+    volumes:
+      - ./data:/app/data
+      - embedding_cache:/root/.cache/fastembed
+    expose:
+      - "8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/ready', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      gotenberg:
+        condition: service_started
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: multimodal-doc-rag-worker
+    command: ["multimodal-rag", "worker"]
+    restart: unless-stopped
+    environment: *app_environment
+    volumes:
+      - ./data:/app/data
+      - embedding_cache:/root/.cache/fastembed
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      gotenberg:
+        condition: service_started
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: multimodal-doc-rag-frontend
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: 3000
+      NUXT_RAG_API_BASE: http://api:8000
     ports:
-      - "${GOTENBERG_PORT:-3001}:3000"
+      - "127.0.0.1:${APP_PORT:-3000}:3000"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    depends_on:
+      api:
+        condition: service_healthy
 
 volumes:
   postgres_data:
+  embedding_cache:
